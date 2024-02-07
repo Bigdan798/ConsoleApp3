@@ -15,31 +15,73 @@ class Program
 
             // Чтение XML файла
             XmlDocument xmlDocument = new XmlDocument();
-            xmlDocument.Load("C:\\Users\\bogda\\source\\repos\\ConsoleApp3\\ConsoleApp3\\market.xml");
+            xmlDocument.Load("C:\\Users\\bogda\\source\\repos\\ConsoleApp3\\ConsoleApp3\\xml+2.xml");
 
             // Парсинг XML и вставка данных в базу данных
-            XmlNodeList nodes = xmlDocument.SelectNodes("Market/Order");
-            foreach (XmlNode node in nodes)
+            XmlNodeList orderNodes = xmlDocument.SelectNodes("orders/order");
+            foreach (XmlNode orderNode in orderNodes)
             {
-                int idBuy = int.Parse(node.SelectSingleNode("id_buy").InnerText);
-                int idUser = int.Parse(node.SelectSingleNode("id_user").InnerText);
-                int idProduct = int.Parse(node.SelectSingleNode("id_product").InnerText);
-                int quantity = int.Parse(node.SelectSingleNode("quantity").InnerText);
-                string dateBuyString = node.SelectSingleNode("date_buy").InnerText;
-                DateTime dateBuy = DateTime.ParseExact(dateBuyString, "yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
-                int idOrder = int.Parse(node.SelectSingleNode("id_order").InnerText);
+                int orderNo = int.Parse(orderNode.SelectSingleNode("no").InnerText);
+                string regDateStr = orderNode.SelectSingleNode("reg_date").InnerText;
+                DateTime regDate = DateTime.ParseExact(regDateStr, "yyyy.MM.dd", CultureInfo.InvariantCulture);
 
-                // Выполнение SQL запроса на вставку данных в базу данных
-                string insertQuery = $"INSERT INTO [Order] (id_buy, id_user, id_product, quantity, date_buy, id_order) " +
-                                     $"VALUES ({idBuy}, {idUser}, {idProduct}, {quantity}, '{dateBuy.ToString("yyyy-MM-dd HH:mm:ss")}', {idOrder})";
-                using (SqlCommand command = new SqlCommand(insertQuery, connection))
+                XmlNodeList productNodes = orderNode.SelectNodes("product");
+                foreach (XmlNode productNode in productNodes)
                 {
-                    command.ExecuteNonQuery();
+                    int quantity = int.Parse(productNode.SelectSingleNode("quantity").InnerText);
+                    string name = productNode.SelectSingleNode("name").InnerText;
+                    decimal price = decimal.Parse(productNode.SelectSingleNode("price").InnerText, CultureInfo.InvariantCulture);
+
+                    // Поиск узла пользователя для каждого заказа
+                    XmlNode userNode = orderNode.SelectSingleNode("user");
+                    string fio = userNode.SelectSingleNode("fio").InnerText;
+
+                    // Выполнение SQL запроса на вставку данных в базу данных
+                    int userId = GetUserIdFromDatabase(connection, fio);
+                    int productId = GetProductIdFromDatabase(connection, name);
+
+                    string insertQuery = "INSERT INTO [Order] (RegDate, Sum, UserId, ProductId, OrderNo, Quantity) " +
+                       "VALUES (@RegDate, @Sum, @UserId, @ProductId, @OrderNo, @Quantity)";
+
+                    using (SqlCommand command = new SqlCommand(insertQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@RegDate", regDate);
+                        command.Parameters.AddWithValue("@Sum", price);
+                        command.Parameters.AddWithValue("@UserId", userId);
+                        command.Parameters.AddWithValue("@ProductId", productId);
+                        command.Parameters.AddWithValue("@OrderNo", orderNo);
+                        command.Parameters.AddWithValue("@Quantity", quantity);
+
+                        command.ExecuteNonQuery();
+                    }
                 }
             }
         }
 
         Console.WriteLine("Данные успешно загружены в базу данных.");
     }
+
+    static int GetUserIdFromDatabase(SqlConnection connection, string fio)
+    {
+        // Выполнение SQL запроса для получения значения пользователя
+        string query = $"SELECT [id_user] FROM Users WHERE FIO = '{fio}'";
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+            int UserId = Convert.ToInt32(command.ExecuteScalar());
+            return UserId;
+        }
+    }
+
+    static int GetProductIdFromDatabase(SqlConnection connection, string productName)
+    {
+        // Выполнение SQL запроса для получения значения продукта
+        string query = $"SELECT id_product FROM Products WHERE NameProd = '{productName}'";
+        using (SqlCommand command = new SqlCommand(query, connection))
+        {
+            int ProductId = (int)command.ExecuteScalar();
+            return ProductId;
+        }
+    }
 }
+
 
