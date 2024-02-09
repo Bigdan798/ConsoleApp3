@@ -38,10 +38,10 @@ class Program
                     // Поиск узла пользователя для каждого заказа
                     XmlNode userNode = orderNode.SelectSingleNode("user");
                     string fio = userNode.SelectSingleNode("fio").InnerText;
-
+                    string email = userNode.SelectSingleNode("email").InnerText;
                     // Выполнение SQL запроса на вставку данных в базу данных
-                    int? userId = GetUserIdFromDatabase(connection, fio);
-                    int? productId = GetProductIdFromDatabase(connection, name);
+                    int? userId = GetUserIdFromDatabase(connection, fio, email);
+                    int? productId = GetProductIdFromDatabase(connection, name, price);
 
                     if (userId != null && productId != null)
                     {
@@ -74,28 +74,41 @@ class Program
         Console.WriteLine("Данные успешно загружены в базу данных.");
     }
 
-    static int? GetUserIdFromDatabase(SqlConnection connection, string fio)
+    static int? GetUserIdFromDatabase(SqlConnection connection, string fio, string email)
     {
+        int? userId = null;
         string query = $"SELECT [id_user] FROM Users WHERE FIO = '{fio}'";
 
         using (SqlCommand command = new SqlCommand(query, connection))
         {
+
             object result = command.ExecuteScalar();
 
             if (result != null)
             {
-                return (int)result;
+                userId = Convert.ToInt32(result);
             }
-            else
+
+            else 
             {
-                return null;
+                string insertUserQuery = $"INSERT INTO Users (FIO, Email) VALUES ('{fio}', '{email}'); SELECT SCOPE_IDENTITY();";
+
+
+                using (SqlCommand insertUserCommand = new SqlCommand(insertUserQuery, connection))
+                {
+                    userId = Convert.ToInt32(insertUserCommand.ExecuteScalar());
+                }
             }
         }
+
+
+        return userId;
     }
 
-    static int? GetProductIdFromDatabase(SqlConnection connection, string productName)
+    static int? GetProductIdFromDatabase(SqlConnection connection, string productName, decimal price)
     {
-        string query = $"SELECT id_product FROM Products WHERE NameProd = '{productName}'";
+        int? productId = null;
+        string query = $"SELECT [id_product] FROM Products WHERE [NameProd] = '{productName}'";
 
         using (SqlCommand command = new SqlCommand(query, connection))
         {
@@ -103,12 +116,21 @@ class Program
 
             if (result != null)
             {
-                return (int)result;
-            }
-            else
-            {
-                return null;
+                productId = Convert.ToInt32(result);
             }
         }
+
+        if (productId == null)
+        {
+            string insertProductQuery = "INSERT INTO Products ([NameProd], [Price]) VALUES (@ProductName, @Price); SELECT SCOPE_IDENTITY();";
+            using (SqlCommand insertProductCommand = new SqlCommand(insertProductQuery, connection))
+            {
+                insertProductCommand.Parameters.AddWithValue("@ProductName", productName);
+                insertProductCommand.Parameters.AddWithValue("@Price", price);
+                productId = Convert.ToInt32(insertProductCommand.ExecuteScalar());
+            }
+        }
+
+        return productId;
     }
 }
