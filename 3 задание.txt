@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Globalization;
 using System.Xml;
@@ -19,6 +20,8 @@ class Program
 
             // Парсинг XML и вставка данных в базу данных
             XmlNodeList orderNodes = xmlDocument.SelectNodes("orders/order");
+            HashSet<int> processedOrders = new HashSet<int>(); // Хранит номера заказов, которые уже были обработаны
+
             foreach (XmlNode orderNode in orderNodes)
             {
                 int orderNo = int.Parse(orderNode.SelectSingleNode("no").InnerText);
@@ -40,31 +43,31 @@ class Program
                     int? userId = GetUserIdFromDatabase(connection, fio);
                     int? productId = GetProductIdFromDatabase(connection, name);
 
-
                     if (userId != null && productId != null)
                     {
-
                         string insertQuery = "INSERT INTO [Order] (RegDate, Sum, UserId, ProductId, OrderNo, Quantity) " +
-                       "VALUES (@RegDate, @Sum, @UserId, @ProductId, @OrderNo, @Quantity)";
+                            "VALUES (@RegDate, @Sum, @UserId, @ProductId, @OrderNo, @Quantity)";
 
                         using (SqlCommand command = new SqlCommand(insertQuery, connection))
                         {
-
                             command.Parameters.AddWithValue("@RegDate", regDate);
                             command.Parameters.AddWithValue("@Sum", price);
                             command.Parameters.AddWithValue("@UserId", userId);
                             command.Parameters.AddWithValue("@ProductId", productId);
                             command.Parameters.AddWithValue("@OrderNo", orderNo);
                             command.Parameters.AddWithValue("@Quantity", quantity);
+
                             command.ExecuteNonQuery();
                         }
-                        
                     }
                     else
                     {
-                        Console.WriteLine($"User or product not found. Skipping order with OrderNo: {orderNo}");
+                        Console.WriteLine($"Пользователь или продукт не найдены. Пропуск заказа под номером: {orderNo}");
+                        break;
                     }
                 }
+                // Добавление обработанного заказа в список
+                processedOrders.Add(orderNo);
             }
         }
 
@@ -74,16 +77,18 @@ class Program
     static int? GetUserIdFromDatabase(SqlConnection connection, string fio)
     {
         string query = $"SELECT [id_user] FROM Users WHERE FIO = '{fio}'";
+
         using (SqlCommand command = new SqlCommand(query, connection))
         {
             object result = command.ExecuteScalar();
+
             if (result != null)
             {
                 return (int)result;
             }
             else
             {
-                return null; 
+                return null;
             }
         }
     }
@@ -91,18 +96,19 @@ class Program
     static int? GetProductIdFromDatabase(SqlConnection connection, string productName)
     {
         string query = $"SELECT id_product FROM Products WHERE NameProd = '{productName}'";
+
         using (SqlCommand command = new SqlCommand(query, connection))
         {
             object result = command.ExecuteScalar();
+
             if (result != null)
             {
                 return (int)result;
             }
             else
             {
-                return null; 
+                return null;
             }
         }
     }
 }
-
